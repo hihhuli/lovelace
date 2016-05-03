@@ -1,0 +1,193 @@
+* {
+    font-family: "LatoWeb";
+    margin: 0;
+}
+
+body {
+    background: #f2f2f2;
+    color: #333;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: "LatoWebHairLine";
+}
+
+h1 {
+    background: #ddd;
+    color: #333;
+    padding: 1.5rem 0 1.5rem 2rem;
+    border-bottom: 4px solid #ccc;
+}
+
+/* Meta */
+
+section.meta {
+    padding: 1rem 2rem 1rem 2rem;
+    background: #e8e8e8;
+    text-align: right;
+}
+
+section.meta > div.breadcrumb {
+    display: inline-block;
+    float: left;
+}
+div.breadcrumb a {
+    color: #480;
+    text-decoration: none;
+}
+div.breadcrumb a:hover {
+    color: #666;
+    transition: all 0.2s ease-in-out;
+}
+
+section.meta > div.top-button {
+    display: inline-block;
+}
+
+section.meta > div.top-button > a {
+    background: #888;
+    padding: 0.5rem 1rem;
+    color: #eee;
+    font-family: "LatoWeb";
+    text-decoration: none;
+    text-transform: uppercase;
+    border: 2px solid #ccc;
+}
+section.meta > div.top-button > a:hover {
+    background: #386c00;
+    transition: all 0.2s ease-in-out;
+}
+
+/* General exercise information */
+
+section.general-information {
+    display: flex;
+    padding: 1.5rem 0 1.5rem 2rem;
+    border-bottom: 4px solid #ddd;
+}
+
+div.generalinfo-left-side {
+    flex: 0 0 60%;
+    border-right: 4px dotted #ddd;
+    padding-right: 1rem;
+    margin-right: 1rem;
+}
+
+textarea {
+    background: #eee;
+    color: #333;
+    border: 2px solid #ddd;
+    padding: 4px;
+    font-family: Inconsolata;
+}
+
+div.generalinfo-right-side {
+    flex: 1;
+}
+
+div.separator {
+    margin: 1rem 2rem 1rem 0;
+    border: 0;
+    border-bottom: 4px dotted #ddd;
+}
+
+ul.exercise-tags {
+    padding: 0;
+    list-style-type: none;
+    display: flex;
+}
+
+li.exercise-tag {
+    padding: 6px;
+    margin: 4px;
+    border-radius: 10px;
+    background: #ddd;
+    cursor: grab;
+    flex: 0 0;
+    font-weight: bold;
+}
+li.exercise-tag:hover {
+    background: #cec;
+    transition: all 0.2s ease-in-out;
+}
+
+/* Included files */
+
+section.included-files {
+    padding: 1.5rem 0 1.5rem 2rem;
+    border-bottom: 4px solid #ddd;
+}
+
+/* Configurable hints */
+
+section.configurable-hints {
+    padding: 1.5rem 0 1.5rem 2rem;
+    border-bottom: 4px solid #ddd;
+}
+
+/* The test tabs & sortable stages and commands */
+
+section.tests {
+    padding: 1.5rem 2rem 1.5rem 2rem;
+    border-bottom: 4px solid #ccc;
+}
+
+ol {
+    list-style-type: none;
+}
+
+li.ui-sortable-handle {
+    cursor: grab;
+}
+
+ol#stages-sortable > li {
+    border: 2px solid #333;
+}
+
+div.flex-container {
+    display: flex;
+}
+
+div.left-side {
+    flex: 0 0 50%;
+    margin: 2px;
+}
+
+div.right-side {
+    flex: 1;
+    border: 2px solid #333;
+    margin: 2px;
+}
+
+/* The form control buttons */
+
+section.form-controls {
+    padding: 1.5rem 2rem 1.5rem 2rem;
+    background: #ddd;
+    text-align: right;
+}
+
+section.form-controls > div {
+    display: inline-block;
+        float: left;
+}
+
+a#delete-exercise {
+    background: #d42;
+    padding: 0.5rem 1rem;
+    color: #eee;
+    font-family: "LatoWeb";
+    text-decoration: none;
+    text-transform: uppercase;
+    border: 2px solid #ccc;
+}
+
+button#save-exercise {
+    background: #888;
+    padding: 0.5rem 1rem;
+    color: #eee;
+    font-family: "LatoWeb";
+    text-decoration: none;
+    text-transform: uppercase;
+    border: 2px solid #ccc;
+}
