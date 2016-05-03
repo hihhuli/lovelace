@@ -482,7 +482,6 @@ class EmbeddedPageMarkup(Markup):
 
             c = {
                 "emb_content": embedded_content,
-                "embedded": True,
                 "content": page,
                 "content_slug": page.slug,
                 "question": question,
@@ -516,6 +515,68 @@ class EmbeddedPageMarkup(Markup):
         return settings
 
 markups.append(EmbeddedPageMarkup)
+
+class EmbeddedFeedbackQuestionMarkup(Markup):
+    name = "Embedded feedback question"
+    shortname = "embedded_feedback"
+    description = "A feedback question embedded into a content page."
+    regexp = r"^\<\!feedback\=(?P<feedback_slug>[^\s>]+)\>\s*$"
+    markup_class = "embedded item"
+    example = "<!feedback=slug-of-some-feedback-question>"
+    inline = False
+    allow_inline = False
+
+    @classmethod
+    def block(cls, block, settings, state):
+        yield settings["rendered_content"]
+
+    @classmethod
+    def settings(cls, matchobj, state):
+        slug = matchobj.group("feedback_slug")
+        settings = {"feedback_slug" : slug}
+        try:
+            question = feedback.models.EmbeddedFeedbackQuestion.objects.get(slug=slug).get_type_object()
+        except courses.models.ContentPage.DoesNotExist as e:
+            raise EmbeddedObjectNotFoundError("embedded feedback question {} couldn't be found".format(slug))
+        else:
+            if "tooltip" in state["context"] and state["context"]["tooltip"]:
+                raise EmbeddedObjectNotAllowedError("embedded feedback questions are not allowed in tooltips")
+
+            c = {
+                "question_obj": question,
+                "emb_feedback": True,
+                "question": question.question,
+                "question_type": question.question_type,
+                "feedback_slug": question.slug,
+                "description": question.description,
+            }
+
+            user = state["request"].user
+            sandboxed = state["request"].path.startswith("/sandbox/")
+            if sandboxed and user.is_authenticated() and user.is_active and user.is_staff:
+                c["sandboxed"] = True
+                c["instance_slug"] = ""
+            elif sandboxed and (not user.is_authenticated() or not user.is_active or not user.is_staff):
+                settings["rendered_content"] = ""
+                return settings
+            else:
+                c["sandboxed"] = False
+                c["instance_slug"] = state["context"]["instance_slug"]
+
+            if question.question_type == "MULTIPLE_CHOICE_FEEDBACK":
+                c["choices"] = question.get_choices()
+                
+            c.update(state["context"])
+
+            t = loader.get_template("feedback/{question_type}.html".format(
+                question_type=question.get_dashed_type() + "-question"
+            ))
+            rendered_content = t.render(c, state["request"])
+
+        settings["rendered_content"] = rendered_content
+        return settings
+
+markups.append(EmbeddedFeedbackQuestionMarkup)
 
 # TODO: Support embeddable JavaScript apps (maybe in iframe?)
 # - http://www.html5rocks.com/en/tutorials/security/sandboxed-iframes/

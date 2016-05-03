@@ -46,6 +46,9 @@ class ContentFeedbackQuestion(models.Model):
         }
         return ANSWER_MODELS[self.question_type]
 
+    def get_dashed_type(self):
+        return self.question_type.lower().replace("_", "-")
+    
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = self.get_url_name()
@@ -99,7 +102,7 @@ class TextfieldFeedbackQuestion(ContentFeedbackQuestion):
 
         answer_object = TextfieldFeedbackUserAnswer(
             question=self, content=content, answer=given_answer, user=user,
-            answerer_ip=ip
+            given_as_admin=user.is_staff, answerer_ip=ip
         )
         answer_object.save()
         return answer_object
@@ -127,7 +130,7 @@ class ThumbFeedbackQuestion(ContentFeedbackQuestion):
 
         answer_object = ThumbFeedbackUserAnswer(
             question=self, content=content, thumb_up=thumb_up, user=user,
-            answerer_ip=ip
+            given_as_admin=user.is_staff, answerer_ip=ip
         )
         answer_object.save()
         return answer_object
@@ -150,7 +153,7 @@ class StarFeedbackQuestion(ContentFeedbackQuestion):
 
         answer_object = StarFeedbackUserAnswer(
             question=self, content=content, rating=rating, user=user,
-            answerer_ip=ip
+            given_as_admin=user.is_staff, answerer_ip=ip
         )
         answer_object.save()
         return answer_object
@@ -173,7 +176,7 @@ class MultipleChoiceFeedbackQuestion(ContentFeedbackQuestion):
 
         answer_object = MultipleChoiceFeedbackUserAnswer(
             question=self, content=content, chosen_answer=MultipleChoiceFeedbackAnswer.objects.get(id=choice), user=user,
-            answerer_ip=ip
+            given_as_admin=user.is_staff, answerer_ip=ip
         )
         answer_object.save()
         return answer_object
@@ -195,6 +198,7 @@ class MultipleChoiceFeedbackAnswer(models.Model):
 
 class ContentFeedbackUserAnswer(models.Model):
     user = models.ForeignKey(User)                          # The user who has given this feedback
+    given_as_admin = models.BooleanField()
     content = models.ForeignKey('courses.ContentPage')      # The content on which this feedback was given
     question = models.ForeignKey(ContentFeedbackQuestion)   # The feedback question this feedback answers
     answerer_ip = models.GenericIPAddressField()
@@ -224,6 +228,229 @@ class MultipleChoiceFeedbackUserAnswer(ContentFeedbackUserAnswer):
 
     def __str__(self):
         return self.chosen_answer.answer
+    
+    class Meta:
+        get_latest_by = "answer_date"
+
+class EmbeddedFeedbackQuestion(models.Model):
+    """A feedback that can be embedded to a content page."""
+    question = models.CharField(verbose_name="Question", max_length=100, unique=True)
+    question_type = models.CharField(max_length=28, default="TEXTFIELD_FEEDBACK", choices=QUESTION_TYPE_CHOICES)
+    description = models.TextField(blank=True, null=True)
+    slug = models.CharField(max_length=255, db_index=True, unique=True)
+    
+    def __str__(self):
+        return self.question
+
+    def get_url_name(self):
+        """Creates a URL and HTML5 ID field friendly version of the name."""
+        return slugify(self.question, allow_unicode=True)
+    
+    def get_type_object(self):
+        """Returns the actual type object of the question object that is the child of EmbeddedFeedbackQuestion."""
+        TYPE_MODELS = {
+            "THUMB_FEEDBACK" : EmbeddedThumbFeedbackQuestion,
+            "STAR_FEEDBACK" : EmbeddedStarFeedbackQuestion,
+            "MULTIPLE_CHOICE_FEEDBACK": EmbeddedMultipleChoiceFeedbackQuestion,
+            "TEXTFIELD_FEEDBACK" : EmbeddedTextfieldFeedbackQuestion,
+        }
+        return TYPE_MODELS[self.question_type].objects.get(id=self.id)
+
+    def get_answer_model(self):
+        """Returns the corresponding answer model of the question object that is the child of EmbeddedFeedbackQuestion."""
+        ANSWER_MODELS = {
+            "THUMB_FEEDBACK" : EmbeddedThumbFeedbackUserAnswer,
+            "STAR_FEEDBACK" : EmbeddedStarFeedbackUserAnswer,
+            "MULTIPLE_CHOICE_FEEDBACK": EmbeddedMultipleChoiceFeedbackUserAnswer,
+            "TEXTFIELD_FEEDBACK" : EmbeddedTextfieldFeedbackUserAnswer,
+        }
+        return ANSWER_MODELS[self.question_type]
+    
+    def get_dashed_type(self):
+        return self.question_type.lower().replace("_", "-")
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = self.get_url_name()
+        else:
+            self.slug = slugify(self.slug, allow_unicode=True)
+
+        super(EmbeddedFeedbackQuestion, self).save(*args, **kwargs)
+
+    def save_answer(self, course_inst, user, ip, answer):
+        pass
+
+    def get_human_readable_type(self):
+        return self.question_type.replace("_", " ").lower()
+
+    def get_answers_by_course_inst(self, course_inst):
+        return self.get_answer_model().objects.filter(question=self, course_instance=course_inst)
+
+    def get_user_answers_by_course_inst(self, user, course_inst):
+        return self.get_answer_model().objects.filter(question=self, user=user, course_instance=course_inst)
+    
+    def get_latest_answer(self, user, course_inst):
+        answers = self.get_user_answers_by_course_inst(user, course_inst)
+        if answers:
+            return answers.latest()
+        else:
+            return None
+
+    def get_latest_answers_by_course_inst(self, course_inst):
+        if connection.vendor == "postgresql":
+            return self.get_answers_by_course_inst(course_inst).order_by("user", "-answer_date").distinct("user")
+        else:
+            raise DatabaseBackendException("Database backend does not support DISTINCT ON")
+
+    def user_answered(self, user, course_inst):
+        return self.get_answer_model().objects.filter(question=self, user=user, course_instance=course_inst).count() >= 1
+            
+    class Meta:
+        ordering = ["question_type"]
+
+class EmbeddedTextfieldFeedbackQuestion(EmbeddedFeedbackQuestion):
+    def save(self, *args, **kwargs):
+        self.slug = self.get_url_name()
+        self.question_type = "TEXTFIELD_FEEDBACK"
+        super(EmbeddedTextfieldFeedbackQuestion, self).save(*args, **kwargs)
+
+    def save_answer(self, course_inst, user, ip, answer):
+        if "text-feedback" in answer.keys():
+            given_answer = answer["text-feedback"].replace("\r", "")
+        else:
+            raise InvalidFeedbackAnswerException("Error: failed to read text feedback from the feedback field!")
+        
+        if not given_answer:
+            raise InvalidFeedbackAnswerException("Your answer is missing!")
+
+        answer_object = EmbeddedTextfieldFeedbackUserAnswer(
+            question=self, course_instance=course_inst, answer=given_answer, user=user,
+            given_as_admin=user.is_staff, answerer_ip=ip
+        )
+        answer_object.save()
+        return answer_object
+                
+    class Meta:
+        verbose_name = "embedded textfield feedback question"
+        proxy = True
+
+class EmbeddedThumbFeedbackQuestion(EmbeddedFeedbackQuestion):
+    def save(self, *args, **kwargs):
+        self.slug = self.get_url_name()
+        self.question_type = "THUMB_FEEDBACK"
+        super(EmbeddedThumbFeedbackQuestion, self).save(*args, **kwargs)
+
+    def save_answer(self, course_inst, user, ip, answer):
+        if "choice" in answer.keys():
+            choice = answer["choice"]
+        else:
+            raise InvalidFeedbackAnswerException("Error: failed to read the selected feedback option!")
+
+        if choice == "up":
+            thumb_up = True
+        else:
+            thumb_up = False
+
+        answer_object = EmbeddedThumbFeedbackUserAnswer(
+            question=self, course_instance=course_inst, thumb_up=thumb_up, user=user,
+            given_as_admin=user.is_staff, answerer_ip=ip
+        )
+        answer_object.save()
+        return answer_object
+        
+    class Meta:
+        verbose_name = "embedded thumb feedback question"
+        proxy = True
+
+class EmbeddedStarFeedbackQuestion(EmbeddedFeedbackQuestion):
+    def save(self, *args, **kwargs):
+        self.slug = self.get_url_name()
+        self.question_type = "STAR_FEEDBACK"
+        super(EmbeddedStarFeedbackQuestion, self).save(*args, **kwargs)
+    
+    def save_answer(self, course_inst, user, ip, answer):
+        if "choice" in answer.keys():
+            rating = int(answer["choice"])
+        else:
+            raise InvalidFeedbackAnswerException("Error: failed to read the selected rating!")
+
+        answer_object = EmbeddedStarFeedbackUserAnswer(
+            question=self, course_instance=course_inst, rating=rating, user=user,
+            given_as_admin=user.is_staff, answerer_ip=ip
+        )
+        answer_object.save()
+        return answer_object
+        
+    class Meta:
+        verbose_name = "embedded star feedback question"
+        proxy = True
+
+class EmbeddedMultipleChoiceFeedbackQuestion(EmbeddedFeedbackQuestion):
+    def save(self, *args, **kwargs):
+        self.slug = self.get_url_name()
+        self.question_type = "MULTIPLE_CHOICE_FEEDBACK"
+        super(EmbeddedMultipleChoiceFeedbackQuestion, self).save(*args, **kwargs)
+    
+    def save_answer(self, content, user, ip, answer):
+        if "choice" in answer.keys():
+            choice = int(answer["choice"])
+        else:
+            raise InvalidFeedbackAnswerException("Error: failed to read the chosen answer!")
+
+        answer_object = EmbeddedMultipleChoiceFeedbackUserAnswer(
+            question=self, course_inst=course_inst, chosen_answer=EmbeddedMultipleChoiceFeedbackAnswer.objects.get(id=choice), 
+            given_as_admin=user.is_staff, user=user, answerer_ip=ip
+        )
+        answer_object.save()
+        return answer_object
+
+    def get_choices(self):
+        choices = EmbeddedMultipleChoiceFeedbackAnswer.objects.filter(question=self.id).order_by('id')
+        return choices
+        
+    class Meta:
+        verbose_name = "embedded multiple choice feedback question"
+        proxy = True
+
+class EmbeddedMultipleChoiceFeedbackAnswer(models.Model):
+    question = models.ForeignKey(EmbeddedMultipleChoiceFeedbackQuestion)
+    answer = models.TextField()
+
+    def __str__(self):
+        return self.answer
+
+class EmbeddedFeedbackUserAnswer(models.Model):
+    user = models.ForeignKey(User)                                  # The user who has given this feedback
+    course_instance = models.ForeignKey('courses.CourseInstance')   # The course instance on which this feedback was given
+    question = models.ForeignKey(EmbeddedFeedbackQuestion)          # The feedback question this feedback answers
+    given_as_admin = models.BooleanField()
+    answerer_ip = models.GenericIPAddressField()
+    answer_date = models.DateTimeField(verbose_name='Date and time of when the user answered this feedback question',
+                                       auto_now_add=True)
+
+class EmbeddedTextfieldFeedbackUserAnswer(EmbeddedFeedbackUserAnswer):
+    answer = models.TextField()
+
+    class Meta:
+        get_latest_by = "answer_date"
+    
+class EmbeddedThumbFeedbackUserAnswer(EmbeddedFeedbackUserAnswer):
+    thumb_up = models.BooleanField()
+    
+    class Meta:
+        get_latest_by = "answer_date"
+
+class EmbeddedStarFeedbackUserAnswer(EmbeddedFeedbackUserAnswer):
+    rating = models.PositiveSmallIntegerField()
+    
+    class Meta:
+        get_latest_by = "answer_date"
+
+class EmbeddedMultipleChoiceFeedbackUserAnswer(EmbeddedFeedbackUserAnswer):
+    chosen_answer = models.ForeignKey(EmbeddedMultipleChoiceFeedbackAnswer)
+
+    def __str__(self):
+        return self.chosen_answer
     
     class Meta:
         get_latest_by = "answer_date"

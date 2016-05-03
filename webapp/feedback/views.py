@@ -113,7 +113,7 @@ def content_feedback_stats(request, content_slug):
     t = loader.get_template("feedback/feedback-stats.html")
     return HttpResponse(t.render(ctx, request))
 
-def receive(request, content_slug, feedback_slug):
+def receive_content_feedback(request, content_slug, feedback_slug):
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
 
@@ -145,3 +145,66 @@ def receive(request, content_slug, feedback_slug):
         "result": "Your feedback was received!"
     })
 
+def receive_content_feedback(request, content_slug, feedback_slug):
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    if not request.user.is_active:
+        return JsonResponse({
+            "result": "Only logged in users can send feedback!"
+        })
+
+    #TODO: Check that the user has successfully enrolled to the course instance.
+    #TODO: Take the revision into account.
+    
+    content = courses.models.ContentPage.objects.get(slug=content_slug)
+    cfq = feedback.models.ContentFeedbackQuestion.objects.get(slug=feedback_slug)
+
+    user = request.user
+    ip = request.META.get("REMOTE_ADDR")
+    answer = request.POST
+
+    question = cfq.get_type_object()
+    
+    try:
+        answer_object = question.save_answer(content, user, ip, answer)
+    except feedback.models.InvalidFeedbackAnswerException as e:
+        return JsonResponse({
+            "error": str(e)
+        })
+
+    return JsonResponse({
+        "result": "Your feedback was received!"
+    })
+
+def receive_emb_feedback(request, instance_slug, feedback_slug):
+    if request.method != "POST":
+        return HttpResponseNotAllowed(["POST"])
+
+    if not request.user.is_active:
+        return JsonResponse({
+            "result": "Only logged in users can send feedback!"
+        })
+
+    #TODO: Check that the user has successfully enrolled to the course instance.
+    #TODO: Take the revision into account.
+    
+    course_inst = courses.models.CourseInstance.objects.get(slug=instance_slug)
+    efq = feedback.models.EmbeddedFeedbackQuestion.objects.get(slug=feedback_slug)
+
+    user = request.user
+    ip = request.META.get("REMOTE_ADDR")
+    answer = request.POST
+
+    question = efq.get_type_object()
+    
+    try:
+        answer_object = question.save_answer(course_inst, user, ip, answer)
+    except feedback.models.InvalidFeedbackAnswerException as e:
+        return JsonResponse({
+            "error": str(e)
+        })
+
+    return JsonResponse({
+        "result": "Your feedback was received!"
+    })

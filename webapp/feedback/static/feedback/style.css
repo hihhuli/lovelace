@@ -26,7 +26,7 @@ div.feedback-container div.exercise-feedback-content {
     border-right: 2px solid #d0d0d0;
 }
 
-div.feedback-container div.lecture-feedback-content {
+div.feedback-container div.titled-feedback-content {
     padding: 10px;
     margin-top: 10px;
     margin-bottom: 10px;
