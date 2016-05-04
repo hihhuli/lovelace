@@ -391,14 +391,14 @@ class EmbeddedMultipleChoiceFeedbackQuestion(EmbeddedFeedbackQuestion):
         self.question_type = "MULTIPLE_CHOICE_FEEDBACK"
         super(EmbeddedMultipleChoiceFeedbackQuestion, self).save(*args, **kwargs)
     
-    def save_answer(self, content, user, ip, answer):
+    def save_answer(self, course_inst, user, ip, answer):
         if "choice" in answer.keys():
             choice = int(answer["choice"])
         else:
             raise InvalidFeedbackAnswerException("Error: failed to read the chosen answer!")
 
         answer_object = EmbeddedMultipleChoiceFeedbackUserAnswer(
-            question=self, course_inst=course_inst, chosen_answer=EmbeddedMultipleChoiceFeedbackAnswer.objects.get(id=choice), 
+            question=self, course_instance=course_inst, chosen_answer=EmbeddedMultipleChoiceFeedbackAnswer.objects.get(id=choice), 
             given_as_admin=user.is_staff, user=user, answerer_ip=ip
         )
         answer_object.save()

@@ -5,16 +5,14 @@ from django.http import HttpResponse, HttpResponseNotFound, HttpResponseNotAllow
     HttpResponseForbidden, JsonResponse
 from django.template import loader
 
-def textfield_feedback_stats(question, content):
-    answers = question.get_answers_by_content(content)
+def textfield_feedback_stats(question, answers):
     return {
         "answers" : sorted(set(answers.values_list("answer", "answer_date")), key=lambda a: a[1], reverse=True),
         "answer_count": answers.count(),
         "user_count": len(set(answers.values_list("user")))
     }
 
-def thumb_feedback_stats(question, content):
-    answers = question.get_latest_answers_by_content(content)
+def thumb_feedback_stats(question, answers):
     user_count = answers.count()
     thumbs_up = list(answers.values_list("thumb_up", flat=True)).count(True)
     thumbs_down = user_count - thumbs_up
@@ -71,7 +69,7 @@ def multiple_choice_feedback_stats(question, content):
         "user_count" : user_count
     }
 
-def content_feedback_stats(request, content_slug):
+def feedback_stats(request, content_slug):
     if not request.user.is_authenticated() or not request.user.is_active or not request.user.is_staff:
         return HttpResponseForbidden("Only logged in admins can view feedback statistics!")
     
@@ -99,20 +97,20 @@ def content_feedback_stats(request, content_slug):
             "question_type": question_type,
             "question_slug": question.slug,
         }
-        if question_type == "TEXTFIELD_FEEDBACK":
-            question_ctx.update(textfield_feedback_stats(question, content))
+        if question_type == "TEXTFIELD_FEEDBACK": 
+            question_ctx.update(textfield_feedback_stats(question, question.get_answers_by_content(content)))
         elif question_type == "THUMB_FEEDBACK":
-            question_ctx.update(thumb_feedback_stats(question, content))
+            question_ctx.update(thumb_feedback_stats(question, question.get_latest_answers_by_content(content)))
         elif question_type == "STAR_FEEDBACK":
-            question_ctx.update(star_feedback_stats(question, content))
+            question_ctx.update(star_feedback_stats(question, question.get_latest_answers_by_content(content)))
         elif question_type == "MULTIPLE_CHOICE_FEEDBACK":
-            question_ctx.update(multiple_choice_feedback_stats(question, content))
+            question_ctx.update(multiple_choice_feedback_stats(question, question.get_latest_answers_by_content(content)))
         stats[question_type.lower()].append(question_ctx)
     ctx["feedback_stats"] = stats
     
     t = loader.get_template("feedback/feedback-stats.html")
     return HttpResponse(t.render(ctx, request))
-
+   
 def receive_content_feedback(request, content_slug, feedback_slug):
     if request.method != "POST":
         return HttpResponseNotAllowed(["POST"])
@@ -197,7 +195,7 @@ def receive_emb_feedback(request, instance_slug, feedback_slug):
     answer = request.POST
 
     question = efq.get_type_object()
-    
+
     try:
         answer_object = question.save_answer(course_inst, user, ip, answer)
     except feedback.models.InvalidFeedbackAnswerException as e:

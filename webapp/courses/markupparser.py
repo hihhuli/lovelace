@@ -555,7 +555,7 @@ class EmbeddedFeedbackQuestionMarkup(Markup):
                 "question": question.question,
                 "question_type": question.question_type,
                 "feedback_slug": question.slug,
-                "description": question.description,
+                "description": "".join(MarkupParser.parse(question.description, state["request"], state["context"])).strip()
             }
 
             user = state["request"].user

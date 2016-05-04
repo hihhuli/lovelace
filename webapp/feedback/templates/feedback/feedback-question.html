@@ -2,32 +2,33 @@
 {% load i18n %}
 
 {% if emb_feedback %}
-  <div class="feedback-container">
-    <div class="titled-feedback-content">
-      <h1 class="content-heading">{{ question }}<span id="give-feedback" class="anchor-offset"></span></h1>
-      <div class="feedback">
-        <div><span>{{ description }}</span></div>
-        {% if not sandboxed %}
-          <form class="feedback-form" method="POST" enctype="multipart/form-data" action="{% url 'feedback:receive_emb_feedback' instance_slug feedback_slug %}">
-        {% else %}
-            <div>Embedded feedback cannot be sent when sandboxed</div>
-        {% endif %}
-{% else %}
+  <div class="titled-feedback-container">
+    <div class="feedback-container">
+      <div class="titled-feedback-content">
+        <h1 class="content-heading">{{ question }}<span id="give-feedback" class="anchor-offset"></span></h1>
         <div class="feedback">
-          <div><span>{{ question }}</span></div>
-          <form class="feedback-form" method="POST" enctype="multipart/form-data" action="{% url 'feedback:receive_content_feedback' content_slug feedback_slug %}">
+          <div>{{ description|safe }}</div>
+          {% if not sandboxed %}
+            <form class="feedback-form" method="POST" enctype="multipart/form-data" action="{% url 'feedback:receive-emb-feedback' instance_slug feedback_slug %}">
+          {% else %}
+              <div class="feedback-disabled">Embedded feedback is disabled in sandbox</div>
+          {% endif %}
+{% else %}
+          <div class="feedback">
+            <div><span>{{ question }}</span></div>
+            <form class="feedback-form" method="POST" enctype="multipart/form-data" action="{% url 'feedback:receive-content-feedback' content_slug feedback_slug %}">
 {% endif %}
 {% if not sandboxed or not emb_feedback %}  
   {% csrf_token %}
   {% block feedback-input %}
   {% endblock %}
-          </form>
+            </form>
 {% endif %}
 <div class="feedback-received"></div>
 <div class="feedback-error"></div>
 {% if emb_feedback %}
+          </div>
         </div>
       </div>
 {% endif %}
     </div>
-
