@@ -3,7 +3,7 @@
 {% load stats_tags %}
 
 {% block user-answer-data %}
-  {% for course, basic_stats, piechart, answer_data, answers_removed in stats %}
+  {% for course, basic_stats, answer_data, answers_removed in stats %}
   <h3 class="content-heading">{{ course|user_answers_title }}<span id="{{ course|heading_id }}" class="anchor-offset"></span></h3> 
   <div class="stat-table">
     <div class="stat-table row">
@@ -11,7 +11,7 @@
         {% show_basic_stats basic_stats %}
         <div>Removed choices have been picked {{ answers_removed }} times.</div>
       </div>
-      {% if piechart %}
+      {% if basic_stats.piechart %}
       <div class="stat-table cell">{% show_piechart piechart %}</div>
       {% endif %}
     </div>

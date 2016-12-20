@@ -25,6 +25,16 @@ from courses.models import *
 
 NO_USERS_MSG = "No users to calculate!"
 
+def user_authorized_to_view_stats(user):
+    return user.is_authenticated() and user.is_active and user.is_staff
+
+def create_exercise_stats_page_render_context(exercise):
+    return {
+        "content": exercise,
+        "tasktype": exercise.get_human_readable_type(),
+        "choices": exercise.get_choices(exercise),
+    }
+
 def user_evaluation(user, exercise):
     return exercise.get_type_object().get_user_evaluation(exercise, user)
 
@@ -46,7 +56,6 @@ def course_exercises_with_color(course, instance):
 def course_instance_exercises(course_inst):
     exercises = []
 
-    # TODO: course has no contents, use instance
     parent_pages = course_inst.contents.select_related('content').order_by('ordinal_number')
     
     for p in parent_pages:
@@ -69,7 +78,7 @@ def course_instances_linked(exercise):
 
 ########################################################### 
 
-def textfield_eval(given, answers):
+def eval_textfield(given, answers):
     given_answer = given.replace("\r", "")
     correct = False
     hinted = False
@@ -103,7 +112,7 @@ def textfield_eval(given, answers):
                     
     return (correct, hinted, matches)
 
-def answers_average(answer_count, user_count):
+def calculate_answers_average(answer_count, user_count):
     """
     Calculates the average of the number of answers per user.
     """
@@ -113,7 +122,7 @@ def answers_average(answer_count, user_count):
     except ZeroDivisionError:
         raise ZeroUsersException("No users to calculate average answer count!") 
 
-def answers_standard_distrib(user_count, answers_avg, answer_counts):
+def calculate_answers_standard_distrib(user_count, answers_avg, answer_counts):
     """
     Calculates the standard distribution of the number of answers per user.
     """
@@ -125,7 +134,7 @@ def answers_standard_distrib(user_count, answers_avg, answer_counts):
         raise ZeroUsersException("No users to calculate standard deviation!")
     return round(math.sqrt(variance), 2)
 
-def exercise_answer_piechart(correct, incorrect, not_answered, canvas_id):
+def calculate_exercise_answer_piechart_stats(correct, incorrect, not_answered, canvas_id):
     """
     Shows statistics of correct and incorrect answers of a single exercise in a pie chart.
     """
@@ -137,6 +146,7 @@ def exercise_answer_piechart(correct, incorrect, not_answered, canvas_id):
         not_answered_pct = not_answered / total
     except ZeroDivisionError:
         raise ZeroUsersException("No users to create piechart!") 
+
     correct_deg = round(correct_pct * 360)
     incorrect_deg = round(incorrect_pct * 360)
     not_answered_deg = 360 - correct_deg - incorrect_deg
@@ -151,7 +161,7 @@ def exercise_answer_piechart(correct, incorrect, not_answered, canvas_id):
         "canvas_id": canvas_id,
     }
 
-def exercise_basic_answer_stats(exercise, users, answers, course_inst=None):
+def calculate_exercise_basic_answer_stats(exercise, users, answers, course_inst=None):
     correctly_by = 0
     incorrectly_by = 0
     users_answered = set()
@@ -177,12 +187,12 @@ def exercise_basic_answer_stats(exercise, users, answers, course_inst=None):
     user_answer_counts = [answer_userids.count(user.id) for user in users_answered]
 
     try:
-        answers_avg = answers_average(answer_count, user_count)
+        answers_avg = calculate_answers_average(answer_count, user_count)
     except ZeroUsersException:
         answers_avg = None
         answers_sd = None
     else:
-        answers_sd = answers_standard_distrib(user_count, answers_avg, user_answer_counts)
+        answers_sd = calculate_answers_standard_distrib(user_count, answers_avg, user_answer_counts)
         
     try:
         answers_median = statistics.median(user_answer_counts)
@@ -198,25 +208,17 @@ def exercise_basic_answer_stats(exercise, users, answers, course_inst=None):
         "correctly_by": correctly_by,
     }
 
-    if course_inst is not None:
-        canvas_id = course_inst.slug
-    else:
-        canvas_id = ""
-
+    canvas_id = course_inst.slug if course_inst is not None else ""
     try:
-        piechart = exercise_answer_piechart(correctly_by, incorrectly_by, unanswered, canvas_id)
+        basic_stats["piechart"] = calculate_exercise_answer_piechart_stats(correctly_by, incorrectly_by, unanswered, canvas_id)
     except ZeroUsersException:
-        piechart = None
+        pass
 
-    return basic_stats, piechart
+    return basic_stats
 
-def checkbox_exercise(exercise, users, course_inst=None):
-    """
-    Shows statistics on a single checkbox exercise.
-    """
-    
+def calculate_checkbox_exercise_stats(exercise, users, course_inst=None):    
     answers = UserCheckboxExerciseAnswer.objects.filter(exercise=exercise, user__in=users)
-    basic_stats, piechart = exercise_basic_answer_stats(exercise, users, answers, course_inst)
+    basic_stats = calculate_exercise_basic_answer_stats(exercise, users, answers, course_inst)
     chosen_answers = list(answers.values_list("chosen_answers", flat=True))
     chosen_answers_set = set(chosen_answers)
     answers_removed_count = 0    
@@ -234,17 +236,12 @@ def checkbox_exercise(exercise, users, course_inst=None):
     
     return (course_inst,
             basic_stats,
-            piechart,
             answer_data, 
             answers_removed_count)
 
-def multiple_choice_exercise(exercise, users, course_inst=None):
-    """
-    Shows statistics on a single multiple choice exercise.
-    """
-    
+def calculate_multiple_choice_exercise_stats(exercise, users, course_inst=None):    
     answers = UserMultipleChoiceExerciseAnswer.objects.filter(exercise=exercise, user__in=users)
-    basic_stats, piechart = exercise_basic_answer_stats(exercise, users, answers, course_inst)
+    basic_stats = calculate_exercise_basic_answer_stats(exercise, users, answers, course_inst)
     chosen_answers = list(answers.values_list("chosen_answer", flat=True))
     chosen_answers_set = set(chosen_answers)
     answers_removed_count = 0
@@ -262,17 +259,12 @@ def multiple_choice_exercise(exercise, users, course_inst=None):
             
     return (course_inst,
             basic_stats,
-            piechart,
             answer_data, 
             answers_removed_count)
 
-def textfield_exercise(exercise, users, course_inst=None):
-    """
-    Shows statistics on a single textfield exercise.
-    """
-
+def calculate_textfield_exercise_stats(exercise, users, course_inst=None):
     answers = UserTextfieldExerciseAnswer.objects.filter(exercise=exercise, user__in=users)
-    basic_stats, piechart = exercise_basic_answer_stats(exercise, users, answers, course_inst)
+    basic_stats = calculate_exercise_basic_answer_stats(exercise, users, answers, course_inst)
     given_answers = list(answers.values_list("given_answer", flat=True))
     given_answers_set = set(given_answers)
 
@@ -284,7 +276,7 @@ def textfield_exercise(exercise, users, course_inst=None):
     choices = exercise.get_choices(exercise)
     for answer in given_answers_set:
         count = given_answers.count(answer)
-        correct, hinted, matches = textfield_eval(answer, choices)
+        correct, hinted, matches = eval_textfield(answer, choices)
         if not correct:
             incorrect_unique += 1
             incorrect_given += count
@@ -307,69 +299,69 @@ def textfield_exercise(exercise, users, course_inst=None):
 
     return (course_inst,
             basic_stats,
-            piechart,
             answer_data, 
             round(hint_coverage_unique * 100, 1),
             round(hint_coverage_given * 100, 1))
     
-def file_upload_exercise(exercise, users, course_inst=None):
-    """
-    Shows statistics on a single file upload exercise.
-    """
-
+def calculate_file_upload_exercise_stats(exercise, users, course_inst=None):
     answers = UserFileUploadExerciseAnswer.objects.filter(exercise=exercise, user__in=users)
-    basic_stats, piechart = exercise_basic_answer_stats(exercise, users, answers, course_inst)
+    basic_stats = calculate_exercise_basic_answer_stats(exercise, users, answers, course_inst)
     
     return (course_inst,
-            basic_stats,
-            piechart)
+            basic_stats,)
 
-def exercise_answer_stats(request, ctx, exercise, exercise_type_f, template):
+def calculate_exercise_answers_stats(exercise, calc_exercise_stats_func):
     all_users = User.objects.filter(is_staff=False).order_by('username')
     course_instances = course_instances_linked(exercise)
-
+    
     stats = []
     users = []
     for course_inst in course_instances:
-        #users_enrolled = filter_users_enrolled(all_users, course_inst)
-        users_enrolled = all_users # until enroll implemented
-        stats.append(exercise_type_f(exercise, users_enrolled, course_inst))
+        users_enrolled = filter_users_enrolled(all_users, course_inst)
+        stats.append(calc_exercise_stats_func(exercise, users_enrolled, course_inst))
         users.extend(users_enrolled)
 
-    stats.append(exercise_type_f(exercise, list(set(users))))
-    ctx.update({"stats": stats})
-    t = loader.get_template("stats/" + template)
-    return HttpResponse(t.render(ctx, request))
-    
+    unique_users = list(set(users))
+    stats.append(calc_exercise_stats_func(exercise, unique_users))
+    return stats
+
+def render_exercise_answer_stats_page(request, context, calc_exercise_stats_func, template_name):
+    exercise = context["content"]
+
+    stats = calculate_exercise_answers_stats(exercise, calc_exercise_stats_func)
+    context.update({"stats": stats})
+
+    template = loader.get_template("stats/" + template_name)
+    return HttpResponse(template.render(context, request))
+
 def single_exercise(request, content_slug):
     """
     Shows statistics on a single selected task.
     """
-    if not request.user.is_authenticated() or not request.user.is_active or not request.user.is_staff:
+
+    if not user_authorized_to_view_stats(request.user):
         return HttpResponseForbidden("Only logged in admins can view exercise statistics!")
 
     try:
         exercise = ContentPage.objects.get(slug=content_slug)
     except ContentPage.DoesNotExist:
         return HttpResponseNotFound("No exercise {} found!".format(content_slug))
-    tasktype = exercise.content_type
 
-    ctx = {
-        "content": exercise,
-        "tasktype": exercise.get_human_readable_type(),
-        "choices": exercise.get_choices(exercise),
+    tasktype = exercise.content_type
+    context = create_exercise_stats_page_render_context(exercise)               
+    render_params_mapping = {
+        "CHECKBOX_EXERCISE" : (calculate_checkbox_exercise_stats, "checkbox-stats.html"),
+        "MULTIPLE_CHOICE_EXERCISE" : (calculate_multiple_choice_exercise_stats, "multiple-choice-stats.html"),
+        "TEXTFIELD_EXERCISE" : (calculate_textfield_exercise_stats, "textfield-stats.html"),
+        "FILE_UPLOAD_EXERCISE" : (calculate_file_upload_exercise_stats, "file-upload-stats.html"),
     }
 
-    if tasktype == "CHECKBOX_EXERCISE":
-        return exercise_answer_stats(request, ctx, exercise, checkbox_exercise, "checkbox-stats.html")
-    elif tasktype == "MULTIPLE_CHOICE_EXERCISE":
-        return exercise_answer_stats(request, ctx, exercise, multiple_choice_exercise, "multiple-choice-stats.html")
-    elif tasktype == "TEXTFIELD_EXERCISE":
-        return exercise_answer_stats(request, ctx, exercise, textfield_exercise, "textfield-stats.html")
-    elif tasktype == "FILE_UPLOAD_EXERCISE":
-        return exercise_answer_stats(request, ctx, exercise, file_upload_exercise, "file-upload-stats.html")
-    else:
+    try:
+        calc_exercise_stats_func, template_name = render_params_mapping[exercise.content_type]
+    except KeyError:
         return HttpResponseNotFound("No stats for exercise {} found!".format(content_slug))
+    else:
+        return render_exercise_answer_stats_page(request, context, calc_exercise_stats_func, template_name)
 
 def user_task(request, user_name, task_name):
     '''Shows a user's answers to a task.'''

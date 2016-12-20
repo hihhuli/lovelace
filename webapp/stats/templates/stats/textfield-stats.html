@@ -3,7 +3,7 @@
 {% load stats_tags %}
 
 {% block user-answer-data %}
-  {% for course_inst, basic_stats, piechart, answer_data, hint_coverage_unique, hint_coverage_given in stats %}
+  {% for course_inst, basic_stats, answer_data, hint_coverage_unique, hint_coverage_given in stats %}
   <h3 class="content-heading">{{ course_inst|user_answers_title }}<span id="{{ course_inst|heading_id }}" class="anchor-offset"></span></h3>
   <div class="stat-table">
     <div class="stat-table row">
@@ -12,7 +12,7 @@
         <div>Hint coverage of unique incorrect answers: {{ hint_coverage_unique|floatformat:"1" }}&#37;</div>
         <div>Hint coverage of all incorrect answers: {{ hint_coverage_given|floatformat:"1" }}&#37;</div>
       </div>
-      {% if piechart %}
+      {% if basic_stats.piechart %}
       <div class="stat-table cell">{% show_piechart piechart %}</div>
       {% endif %}
     </div>
