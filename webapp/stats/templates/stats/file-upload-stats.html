@@ -11,7 +11,7 @@
         {% show_basic_stats basic_stats %}
       </div>
       {% if basic_stats.piechart %}
-      <div class="stat-table cell">{% show_piechart piechart %}</div>
+      <div class="stat-table cell">{% show_piechart basic_stats.piechart %}</div>
       {% endif %}
     </div>
   </div>

@@ -41,6 +41,9 @@ def user_evaluation(user, exercise):
 def user_has_answered(user, exercise):
     return user_evaluation(user, exercise) != "unanswered"
 
+def user_has_answered_any(user, exercises):
+    return any(user_has_answered(user, exercise) for exercise in exercises)
+
 def course_exercises_with_color(course, instance):
     exercises = []
     parent_pages = instance.contents.select_related('content').order_by('ordinal_number')
@@ -55,7 +58,6 @@ def course_exercises_with_color(course, instance):
 
 def course_instance_exercises(course_inst):
     exercises = []
-
     parent_pages = course_inst.contents.select_related('content').order_by('ordinal_number')
     
     for p in parent_pages:
@@ -65,7 +67,9 @@ def course_instance_exercises(course_inst):
     return exercises
 
 def filter_users_enrolled(users, course_inst):
-    return [user for user in users if user in course_inst.enrolled_users.all()]
+    #return [user for user in users if user in course_inst.enrolled_users.all()]
+    exercises = course_instance_exercises(course_inst)
+    return [user for user in users if user_has_answered_any(user, exercises)]
 
 def course_instances_linked(exercise):
     linked = []
@@ -335,10 +339,6 @@ def render_exercise_answer_stats_page(request, context, calc_exercise_stats_func
     return HttpResponse(template.render(context, request))
 
 def single_exercise(request, content_slug):
-    """
-    Shows statistics on a single selected task.
-    """
-
     if not user_authorized_to_view_stats(request.user):
         return HttpResponseForbidden("Only logged in admins can view exercise statistics!")
 

@@ -47,10 +47,10 @@ table.fixed {
 }
 
 col.count {
-    width: 65px;
+    width: 75px;
 }
 col.correct {
-    width: 80px;
+    width: 90px;
 }
 col.hint-given {
     width: 60px;
